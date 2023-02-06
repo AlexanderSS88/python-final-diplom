@@ -1,20 +1,25 @@
+from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Sum, F
 from django.http import JsonResponse
 from rest_framework.authtoken.models import Token
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView, get_object_or_404
 import json
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from endpoints.serializers import UserSerializer, ProductSerializer, ProductInfoSerializer, OrderSerializer, \
-    UsrAdressSerializer
-from service.models import Product, ProductInfo, Order, UsersContactPhone, UsersContactAdress, User
+from rest_framework.viewsets import ModelViewSet
 
-# 9.Заказ.'Статус: Доставлен ': ser_info.data('dt')
+from endpoints.serializers import UserSerializer, ProductSerializer, \
+    ProductInfoSerializer, OrderSerializer, UsrAdressSerializer
+from service.models import Product, ProductInfo, Order, \
+    UsersContactPhone, UsersContactAdress, User
+
+
 
 """1. Вход покупателей. Авторизация."""
 class LoginAccount(APIView):
+
     def post(self, request, *args, **kwargs):
         if {'email', 'password'}.issubset(request.data):
             user = authenticate(
@@ -25,30 +30,33 @@ class LoginAccount(APIView):
             if user is not None:
                 if user.is_active:
                     token, _ = Token.objects.get_or_create(user=user)
-                    return JsonResponse({'Status': True, 'Token': token.key})
+                    return JsonResponse({'Status': True,
+                                         'Token': token.key
+                                         })
             return JsonResponse(
                 {'Status': False,
                  'Errors': 'Не удалось авторизовать'}
                 )
         return JsonResponse(
             {'Status': False,
-             'Errors': 'Не указаны все необходимые аргументы'}
+             'Errors': 'Не указаны необходимые аргументы'}
             )
+
 
 
 """2. Регистрация покупателей"""
 class RegisterAccount(APIView):
+
     def post(self, request, *args, **kwargs):
-        # проверяем обязательные аргументы
+        # проверка обязательных аргументов
         if {'first_name',
             'last_name',
             'email',
             'password',
             'password_rep',
             }.issubset(request.data):
-            errors = {}
-            # проверяем пароль на сложность
             if request.data['password'] == request.data['password_rep']:
+                # проверяем пароль на сложность
                 try:
                     validate_password(request.data['password'])
                 except Exception as password_error:
@@ -59,7 +67,7 @@ class RegisterAccount(APIView):
                         {'Status': False,
                          'Errors': {'password': error_array}
                          }
-                    )
+                        )
                 else:
                     # проверяем данные для уникальности имени пользователя
                     request.data._mutable = True
@@ -70,20 +78,19 @@ class RegisterAccount(APIView):
                         user = user_serializer.save()
                         user.set_password(request.data['password'])
                         user.save()
-                        # new_user_registered.send(
-                        #     sender=self.__class__,
-                        #     user_id=user.id
-                        #     )
                         return JsonResponse({'Status': True})
                     else:
                         return JsonResponse({'Status': False,
-                                             'Errors': user_serializer.errors}
-                                            )
+                                             'Errors': user_serializer.errors
+                                             })
             else:
                 return JsonResponse({'Status': False,
                                      'Errors': 'Пароли не совпадают'}
                                     )
-        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+        return JsonResponse({'Status': False,
+                             'Errors': 'Не указаны необходимые аргументы'
+                             })
+
 
 
 """3. Список товаров"""
@@ -92,18 +99,35 @@ class ProductListView(ListAPIView):
     serializer_class = ProductSerializer
 
 
+
 """4. Карточка товара"""
-class ProductView(APIView):
+class ProductDetailView(APIView):
     def get(self, request, *args, **kwargs):
-        queryset = ProductInfo.objects.filter(id=request.query_params.get('id')).select_related(
-            'product__name',
-            'model',
-            'shop',
-            'product__category',
-            'quantity'
-        ).prefetch_related('product_parameters')
-        serializer = ProductInfoSerializer(queryset)
-        return Response(serializer.data)
+        if {'shop_id'}.issubset(request.query_params):
+            product = get_object_or_404(Product.objects.all(), pk=args).select_related('category__name')
+            ser_product = ProductSerializer(product)
+            left_module = json.dumps({'Наименование: ': ser_product.data['name'],
+                                     'Описание: ': ser_product.data['category__name']})
+
+            needed_product = ProductInfo.objects.all().filter(product=product.id,
+                                                              shop=request.query_params.get('shop_id'),
+                                                                 ).select_related('shop__name').first()
+            ser_needed_product = ProductInfoSerializer(needed_product)
+            rigth_module = json.dumps({'Поставщик: ': ser_needed_product.data['shop__name'],
+                                       'Характеристики: ': ser_needed_product.data['product_parameters'],
+                                       'Цена: ': ser_needed_product.data['price'],
+                                       'Количество: ': ser_needed_product.data['quantity'],
+                                       'В корзину': '',
+                                       })
+        else:
+            return JsonResponse({'Status': False,
+                                 'Errors': 'Отсутствует выбор магазина'}
+                                )
+
+        return JsonResponse({'left_module': left_module,
+                             'rigth_module: ': rigth_module
+                             })
+
 
 
 """5. Корзина"""
@@ -142,9 +166,18 @@ class BasketView(APIView):
                 'ordered_items__shop__product_infos__price'
                 'ordered_items__quantity'
                 ).annotate(
-                    total_price=Sum(F('ordered_items__quantity') * F('ordered_items__shop__product_infos__price')),
-                    )
-        ).exclude('id', 'user', 'dt', 'status', 'cost_delivery', 'order_price', 'final_price', 'adress_cont', 'phone_cont').distinct()
+                    total_price=Sum(F(
+                        'ordered_items__quantity') * F('ordered_items__shop__product_infos__price')
+                                    ))).exclude('id',
+                                                'user',
+                                                'dt',
+                                                'status',
+                                                'cost_delivery',
+                                                'order_price',
+                                                'final_price',
+                                                'adress_cont',
+                                                'phone_cont'
+                                                ).distinct()
         posit_list = OrderSerializer(basket, many=True)
 
         total_list = basket.objects.annotate(
@@ -169,7 +202,10 @@ class BasketView(APIView):
 class AcceptOrder(APIView):
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+            return JsonResponse({'Status': False,
+                                 'Error': 'Log in required'},
+                                status=403
+                                )
 
         if {'phone'}.issubset(request.data):
             request.data._mutable = True
@@ -178,8 +214,9 @@ class AcceptOrder(APIView):
             if serializer.is_valid():
                 serializer.save()
             else:
-                return JsonResponse({'Status': False, 'Errors': serializer.errors})
-
+                return JsonResponse({'Status': False,
+                                     'Errors': serializer.errors
+                                     })
 
         if {'city', 'street', 'house'}.issubset(request.data):
             request.data._mutable = True
@@ -191,11 +228,15 @@ class AcceptOrder(APIView):
             else:
                 JsonResponse({'Status': False, 'Errors': serializer.errors})
         else:
-            return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
-
-        person = User.objects.filter(id=request.user.id).exclude('id', 'company', 'position', 'adress_cont')
+            return JsonResponse({'Status': False,
+                                 'Errors': 'Не указаны  необходимые аргументы'
+                                 })
+        person = User.objects.filter(id=request.user.id).exclude('id',
+                                                                 'company',
+                                                                 'position',
+                                                                 'adress_cont'
+                                                                 )
         list_of_address = UsersContactAdress.object.filter(user=request.user.id)
-
         serializer_bio = UserSerializer(person)
         serializer_adr = UsrAdressSerializer(list_of_address, many=True)
 
@@ -229,9 +270,17 @@ class GreetingOrder(APIView):
                 'ordered_items__shop',
                 'ordered_items__shop__product_infos__price'
                 'ordered_items__quantity'
-        ).exclude('id', 'user', 'dt', 'status', 'total_price', 'cost_delivery', 'order_price', 'final_price',
-                  'adress_cont', 'phone_cont'). \
-            annotate(summ=Sum(F('ordered_items__quantity') * F('ordered_items__shop__product_infos__price'))).distinct()
+        ).exclude('id',
+                  'user',
+                  'dt',
+                  'status',
+                  'total_price',
+                  'cost_delivery',
+                  'order_price',
+                  'final_price',
+                  'adress_cont',
+                  'phone_cont').annotate(summ=Sum(F(
+            'ordered_items__quantity') * F('ordered_items__shop__product_infos__price'))).distinct()
 
         order_client = Order.objects.filter(
             user=request.user.id,
@@ -240,24 +289,21 @@ class GreetingOrder(APIView):
             'user__email',
             'user__contactphone',
             'user__contactadress')
-
         ser_info = OrderSerializer(order_client)
         ser_pos = OrderSerializer(order_positions, many=True)
-
         upper_module = json.dumps({
             'Номер вашего заказа: ': ser_info.data['id'],
             'Наш оператор свяжется с Вами в ближайшее время для уточнения делатей заказа ': '',
             'Статус заказов вы можете посмотреть в разделе "Заказы" ': ''
             })
-
         main_module = json.dumps({
             'Детали заказа: ': ser_pos.data,
             'Детали получателя: ': ser_info.data['user', 'user__email', 'user__contactphone'],
             'Адрес: ': ser_info.data['user__contactadress']
             })
-
         return JsonResponse({'Верхний блок': upper_module,
                              'Основной блок': main_module})
+
 
 
 """8. Список заказов"""
@@ -269,16 +315,29 @@ class ListOrderView(APIView):
                 status=403,
                 )
         orders = (Order.objects.filter(user=request.user.id).annotate(
-            order_price=Sum(F('ordered_items__quantity') * F('ordered_items__shop__product_infos__price'))).distinct()).\
-            exclude('user', 'ordered_items', 'summ', 'total_summ', 'cost_delivery', 'final_price', 'total', 'adress_cont', 'phone_cont')
+            order_price=Sum(F(
+                'ordered_items__quantity') * F('ordered_items__shop__product_infos__price')
+                            )).distinct()).\
+            exclude('user',
+                    'ordered_items',
+                    'summ',
+                    'total_summ',
+                    'cost_delivery',
+                    'final_price',
+                    'total',
+                    'adress_cont',
+                    'phone_cont'
+                    )
         ser_orders = OrderSerializer(orders , many=True)
         return JsonResponse({
             'История заказов': ser_orders.data,
         })
 
 
+
 """9. Заказ"""
 class OrderView(APIView):
+
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({
@@ -304,21 +363,32 @@ class OrderView(APIView):
             'ordered_items__shop',
             'ordered_items__shop__product_infos__price'
             'ordered_items__quantity'
-        ).exclude('id', 'user', 'dt', 'status', 'total_price', 'cost_delivery', 'order_price', 'final_price', 'adress_cont', 'phone_cont').\
-            annotate(summ=Sum(F('ordered_items__quantity') * F('ordered_items__shop__product_infos__price'))).distinct()
+        ).exclude('id',
+                  'user',
+                  'dt',
+                  'status',
+                  'total_price',
+                  'cost_delivery',
+                  'order_price',
+                  'final_price',
+                  'adress_cont',
+                  'phone_cont'
+                  ).annotate(summ=Sum(F(
+            'ordered_items__quantity') * F('ordered_items__shop__product_infos__price'))).distinct()
 
         ser_info = OrderSerializer(order_client)
         ser_pos = OrderSerializer(order_positions, many=True)
-
         upper_module = json.dumps({
             'Номер: ': ser_info.data('id'),
             'Дата: ': ser_info.data('dt'),
             'Статус: Доставлен ': ser_info.data('dt')
             })
-
         main_module = json.dumps({
             'Детали заказа: ': ser_pos.data,
-            'Детали получателя: ': ser_info.data['user', 'user__email', 'user__contactphone'],
+            'Детали получателя: ': ser_info.data['user',
+                                                 'user__email',
+                                                 'user__contactphone'
+                                                ],
             'Адрес: ': ser_info.data['user__contactadress']
              })
 

@@ -13,10 +13,16 @@ class PartnerUpdate(APIView):
     def post(self, request, *args, **kwargs):
 
         if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Нужна авторизация'}, status=403)
+            return JsonResponse(
+                {'Status': False, 'Error': 'Нужна авторизация'},
+                status=403
+                )
 
         if request.user.type != 'shop':
-            return JsonResponse({'Status': False, 'Error': 'Только для магазинов'}, status=403)
+            return JsonResponse(
+                {'Status': False, 'Error': 'Только для магазинов'},
+                status=403
+                )
 
         url = request.data.get('url')
         if url:
@@ -28,7 +34,6 @@ class PartnerUpdate(APIView):
             else:
                 stream = get(url).content
                 data = load(stream, Loader=Loader)
-
                 shop, _ = Shop.objects.get_or_create(
                     name=data['shop'],
                     user=request.user.id
@@ -63,7 +68,9 @@ class PartnerUpdate(APIView):
                             parameter=parameter_object.id,
                             value=value
                             )
-
                 return JsonResponse({'Status': True})
 
-        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+        return JsonResponse(
+            {'Status': False,
+             'Errors': 'Не указаны все необходимые аргументы'}
+            )
