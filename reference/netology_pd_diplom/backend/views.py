@@ -1,17 +1,15 @@
 from distutils.util import strtobool
 
-from django.contrib.auth import authenticate
-from django.contrib.auth.password_validation import validate_password
+from django.contrib import validate_password
 from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
-from django.db import IntegrityError
+from django import URLValidator
+from django import IntegrityError
 from django.db.models import Q, Sum, F
-from django.http import JsonResponse
+from django import JsonResponse
 from requests import get
-from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework import Response
+from rest_framework import APIView
 from ujson import loads as load_json
 from yaml import load as load_yaml, Loader
 
@@ -19,46 +17,46 @@ from backend.models import Shop, Category, Product, ProductInfo, Parameter, Prod
     Contact, ConfirmEmailToken
 from backend.serializers import UserSerializer, CategorySerializer, ShopSerializer, ProductInfoSerializer, \
     OrderItemSerializer, OrderSerializer, ContactSerializer
-from backend.signals import new_user_registered, new_order
+from backend.signals import new_order
 
 
-class RegisterAccount(APIView):
-    """
-    Для регистрации покупателей
-    """
-    # Регистрация методом POST
-    def post(self, request, *args, **kwargs):
-
-        # проверяем обязательные аргументы
-        if {'first_name', 'last_name', 'email', 'password', 'company', 'position'}.issubset(request.data):
-            errors = {}
-
-            # проверяем пароль на сложность
-
-            try:
-                validate_password(request.data['password'])
-            except Exception as password_error:
-                error_array = []
-                # noinspection PyTypeChecker
-                for item in password_error:
-                    error_array.append(item)
-                return JsonResponse({'Status': False, 'Errors': {'password': error_array}})
-            else:
-                # проверяем данные для уникальности имени пользователя
-                request.data._mutable = True
-                request.data.update({})
-                user_serializer = UserSerializer(data=request.data)
-                if user_serializer.is_valid():
-                    # сохраняем пользователя
-                    user = user_serializer.save()
-                    user.set_password(request.data['password'])
-                    user.save()
-                    new_user_registered.send(sender=self.__class__, user_id=user.id)
-                    return JsonResponse({'Status': True})
-                else:
-                    return JsonResponse({'Status': False, 'Errors': user_serializer.errors})
-
-        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+# class RegisterAccount(APIView):
+#     """
+#     Для регистрации покупателей
+#     """
+#     # Регистрация методом POST
+#     def post(self, request, *args, **kwargs):
+#
+#         # проверяем обязательные аргументы
+#         if {'first_name', 'last_name', 'email', 'password', 'company', 'position'}.issubset(request.data):
+#             errors = {}
+#
+#             # проверяем пароль на сложность
+#
+#             try:
+#                 validate_password(request.data['password'])
+#             except Exception as password_error:
+#                 error_array = []
+#                 # noinspection PyTypeChecker
+#                 for item in password_error:
+#                     error_array.append(item)
+#                 return JsonResponse({'Status': False, 'Errors': {'password': error_array}})
+#             else:
+#                 # проверяем данные для уникальности имени пользователя
+#                 request.data._mutable = True
+#                 request.data.update({})
+#                 user_serializer = UserSerializer(data=request.data)
+#                 if user_serializer.is_valid():
+#                     # сохраняем пользователя
+#                     user = user_serializer.save()
+#                     user.set_password(request.data['password'])
+#                     user.save()
+#                     new_user_registered.send(sender=self.__class__, user_id=user.id)
+#                     return JsonResponse({'Status': True})
+#                 else:
+#                     return JsonResponse({'Status': False, 'Errors': user_serializer.errors})
+#
+#         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
 
 class ConfirmAccount(APIView):
@@ -191,9 +189,7 @@ class ProductInfoView(APIView):
 
 
 class BasketView(APIView):
-    """
-    Класс для работы с корзиной пользователя
-    """
+    """Класс для работы с корзиной пользователя"""
 
     # получить корзину
     def get(self, request, *args, **kwargs):
