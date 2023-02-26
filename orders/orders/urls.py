@@ -16,15 +16,29 @@ Including another URLconf
 
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from rest_framework.routers import DefaultRouter
+
+import endpoints.views
 from endpoints.views import LoginAccount, RegisterAccount, \
-    ProductListView, ProductDetailView, BasketView, AcceptOrder, \
+    ProductDetailView, BasketView, AcceptOrder, \
     GreetingOrder, ListOrderView, OrderView
 from service.views import PartnerUpdate
+
+
+router = DefaultRouter()
+router.register(r'products',
+                endpoints.views.ProductViewSet,
+                basename="all_products_3"
+                )
+
 
 app_name = 'orders'
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('user/', include('allauth.urls')),
+    path('user/', include(router.urls)),
     path('user/login',
          LoginAccount.as_view(),
          name='user_login_1'
@@ -32,10 +46,6 @@ urlpatterns = [
     path('user/register',
          RegisterAccount.as_view(),
          name='user_register_2'
-         ),
-    path('user/products',
-         ProductListView.as_view(),
-         name='all_products_3'
          ),
     path('user/products/<int:pk>',
          ProductDetailView.as_view(),
@@ -65,4 +75,10 @@ urlpatterns = [
          PartnerUpdate.as_view(),
          name='update_catalog'
          ),
+    path('api/schema/',
+         SpectacularAPIView.as_view(),
+         name='schema'),
+    path('api/schema/swagger-ui/',
+         SpectacularSwaggerView.as_view(url_name='schema'),
+         name='swagger-ui'),
     ]

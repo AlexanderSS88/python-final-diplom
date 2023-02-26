@@ -14,6 +14,7 @@ from endpoints.serializers import UserSerializer, ProductSerializer, \
     ProductInfoSerializer, OrderSerializer, UsrAdressSerializer
 from service.models import Product, ProductInfo, Order, \
     UsersContactPhone, UsersContactAdress, User
+from celery import shared_task
 
 
 
@@ -94,7 +95,7 @@ class RegisterAccount(APIView):
 
 
 """3. Список товаров"""
-class ProductListView(ListAPIView):
+class ProductViewSet(ModelViewSet):
     queryset = Product.objects.order_by('category__name', 'name')
     serializer_class = ProductSerializer
 
@@ -102,6 +103,7 @@ class ProductListView(ListAPIView):
 
 """4. Карточка товара"""
 class ProductDetailView(APIView):
+
     def get(self, request, *args, **kwargs):
         if {'shop_id'}.issubset(request.query_params):
             product = get_object_or_404(Product.objects.all(), pk=args).select_related('category__name')
@@ -125,7 +127,7 @@ class ProductDetailView(APIView):
                                 )
 
         return JsonResponse({'left_module': left_module,
-                             'rigth_module: ': rigth_module
+                             'rigth_module': rigth_module
                              })
 
 
@@ -148,7 +150,7 @@ class BasketView(APIView):
             cost_delivery = distan/11*discount
         else:
             cost_delivery = distan/10.5*discount
-        cost_delivery=cost_delivery*quantity*0.4
+        cost_delivery = cost_delivery*quantity*0.4
         return cost_delivery
 
     def get(self, request, *args, **kwargs):
@@ -182,7 +184,7 @@ class BasketView(APIView):
 
         total_list = basket.objects.annotate(
             order_price=Sum('total_price'),
-            cost_delivery=self.delivery(),
+            cost_delivery=self.delivery(request.user.id),
             final_price='cost_delivery'+'final_price'
             )
 
@@ -200,6 +202,7 @@ class BasketView(APIView):
 
 """6. Подтверждение заказа."""
 class AcceptOrder(APIView):
+
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False,
@@ -248,6 +251,7 @@ class AcceptOrder(APIView):
 
 """7. Спасибо за заказ"""
 class GreetingOrder(APIView):
+
     def get(self, request, *args, **kwargs):
 
         # list_goods = Order.objects.filter(id=request.data['id'])
@@ -308,6 +312,7 @@ class GreetingOrder(APIView):
 
 """8. Список заказов"""
 class ListOrderView(APIView):
+
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({
