@@ -19,7 +19,6 @@ from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
-
 import endpoints.views
 from endpoints.views import LoginAccount, RegisterAccount, \
     ProductDetailView, BasketView, AcceptOrder, \
@@ -36,9 +35,9 @@ router.register(r'products',
 
 app_name = 'orders'
 urlpatterns = [
+    path('', include(router.urls)),
     path('admin/', admin.site.urls),
     path('user/', include('allauth.urls')),
-    path('user/', include(router.urls)),
     path('user/login',
          LoginAccount.as_view(),
          name='user_login_1'

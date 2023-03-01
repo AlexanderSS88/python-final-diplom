@@ -1,7 +1,8 @@
 import pytest
 from model_bakery import baker
 from rest_framework.test import APIClient
-from service.models import Order, OrderItem, User, Product, Shop, Category, ProductInfo, Parameter, ProductParameter, \
+from service.models import Order, OrderItem, User, Product, Shop, \
+    Category, ProductInfo, Parameter, ProductParameter, \
     UsersContactPhone, UsersContactAdress
 
 
